@@ -1,0 +1,10 @@
+*.zip
+*.rar
+*.7z
+archive.zip
+
+__pycache__/
+.ipynb_checkpoints/
+.env
+venv/
+.venv/
