@@ -1,11 +1,16 @@
+
 import streamlit as st
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
+
 from torchvision import transforms
 from PIL import Image
-import io
+
+import numpy as np
+import pickle
+import os
 
 
 # ============================================================
@@ -13,255 +18,394 @@ import io
 # ============================================================
 
 st.set_page_config(
-    page_title="Signature Verification System",
+    page_title="Signature Verification",
     page_icon="✍️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="centered"
 )
 
 
 # ============================================================
 # CUSTOM CSS
 # ============================================================
-
 # ============================================================
-# CUSTOM CSS - FIXED COLORS
+# CUSTOM CSS
 # ============================================================
 
-st.markdown("""
-<style>
+st.markdown(
+    """
+    <style>
 
-    /* ==============================
-       MAIN APP
-       ============================== */
+    /* =====================================================
+       MAIN APPLICATION
+       ===================================================== */
 
     .stApp {
-        background-color: #f5f7fb;
+        background: linear-gradient(135deg, #f8f9ff 0%, #eef0ff 100%);
         color: #1f2937;
     }
 
-
-    /* ==============================
-       SIDEBAR
-       ============================== */
-
-    section[data-testid="stSidebar"] {
-        background-color: #171b2e;
-    }
-
-    section[data-testid="stSidebar"] * {
-        color: #ffffff !important;
+    /* Main content width */
+    .block-container {
+        max-width: 1100px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
     }
 
 
-    /* ==============================
-       MAIN TITLE
-       ============================== */
+    /* =====================================================
+       TITLE
+       ===================================================== */
 
-    .main-title {
-        font-size: 42px;
-        font-weight: 700;
+    .title {
         text-align: center;
-        color: #202a55 !important;
-        margin-bottom: 5px;
+        font-size: 42px;
+        font-weight: 800;
+        color: #29235c !important;
+        margin-top: 10px;
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
     }
 
     .subtitle {
         text-align: center;
-        color: #5b6475 !important;
+        color: #667085 !important;
         font-size: 18px;
         margin-bottom: 35px;
     }
 
 
-    /* ==============================
-       CARDS
-       ============================== */
+    /* =====================================================
+       UPLOAD CARDS
+       ===================================================== */
 
-    .card {
-        background-color: #ffffff !important;
-        padding: 25px;
-        border-radius: 15px;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-        margin-bottom: 20px;
-        color: #1f2937 !important;
+    .upload-card {
+        background: #ffffff !important;
+        padding: 22px 24px;
+        border-radius: 16px;
+        border: 1px solid #e2e4f0;
+        box-shadow: 0 8px 25px rgba(42, 35, 92, 0.08);
+        margin-bottom: 12px;
+        min-height: 120px;
     }
 
-    .card h2,
-    .card h3 {
-        color: #202a55 !important;
+    .upload-card h3 {
+        color: #29235c !important;
+        font-size: 21px;
+        font-weight: 700;
+        margin-bottom: 8px;
     }
 
-    .card p {
-        color: #4b5563 !important;
-        font-size: 16px;
-        line-height: 1.6;
-    }
-
-
-    /* ==============================
-       ALL MAIN TEXT
-       ============================== */
-
-    .main .block-container {
-        color: #1f2937;
-    }
-
-    .main h1,
-    .main h2,
-    .main h3,
-    .main h4 {
-        color: #202a55 !important;
-    }
-
-    .main p,
-    .main li {
-        color: #374151 !important;
+    .upload-card p {
+        color: #667085 !important;
+        font-size: 15px;
+        margin-bottom: 0;
     }
 
 
-    /* ==============================
-       HOW IT WORKS
-       ============================== */
+    /* =====================================================
+       STREAMLIT FILE UPLOADER
+       ===================================================== */
 
-    .main strong {
-        color: #202a55 !important;
+    div[data-testid="stFileUploader"] {
+        background: #ffffff !important;
+        border: 1px solid #dedff0 !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        box-shadow: 0 4px 12px rgba(42, 35, 92, 0.05);
     }
 
-
-    /* ==============================
-       RESULT - ORIGINAL
-       ============================== */
-
-    .result-original {
-        background-color: #dcfce7 !important;
-        border: 2px solid #22c55e;
-        padding: 25px;
-        border-radius: 15px;
-        text-align: center;
-        color: #166534 !important;
-        font-size: 30px;
-        font-weight: bold;
-    }
-
-    .result-original span {
-        color: #166534 !important;
-    }
-
-
-    /* ==============================
-       RESULT - FORGED
-       ============================== */
-
-    .result-forged {
-        background-color: #fee2e2 !important;
-        border: 2px solid #ef4444;
-        padding: 25px;
-        border-radius: 15px;
-        text-align: center;
-        color: #991b1b !important;
-        font-size: 30px;
-        font-weight: bold;
-    }
-
-    .result-forged span {
-        color: #991b1b !important;
-    }
-
-
-    /* ==============================
-       BUTTON
-       ============================== */
-
-    .stButton > button {
-        background-color: #423a8e !important;
-        color: #ffffff !important;
+    div[data-testid="stFileUploader"] section {
+        background: #ffffff !important;
         border: none !important;
-        border-radius: 10px !important;
-        padding: 12px 20px !important;
-        font-size: 16px !important;
+    }
+
+    div[data-testid="stFileUploader"] label {
+        color: #4b5563 !important;
         font-weight: 600 !important;
     }
 
-    .stButton > button:hover {
-        background-color: #342d75 !important;
+    div[data-testid="stFileUploader"] small {
+        color: #6b7280 !important;
+    }
+
+    div[data-testid="stFileUploader"] button {
+        background: #ffffff !important;
+        color: #423a8e !important;
+        border: 1px solid #423a8e !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+
+    div[data-testid="stFileUploader"] button:hover {
+        background: #423a8e !important;
         color: #ffffff !important;
     }
 
 
-    /* ==============================
-       FILE UPLOADER
-       ============================== */
+    /* =====================================================
+       UPLOAD LABELS
+       ===================================================== */
 
-    [data-testid="stFileUploader"] {
-        background-color: #ffffff !important;
-        border: 1px solid #d1d5db;
-        border-radius: 12px;
-        padding: 10px;
+    .stFileUploader label,
+    [data-testid="stFileUploader"] label {
+        color: #4b5563 !important;
     }
 
-    [data-testid="stFileUploader"] * {
+
+    /* =====================================================
+       COMPARE BUTTON
+       ===================================================== */
+
+    .stButton > button {
+        width: 100%;
+        background: linear-gradient(
+            135deg,
+            #423a8e,
+            #5549b8
+        ) !important;
+
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 10px !important;
+
+        padding: 13px 20px !important;
+        font-size: 17px !important;
+        font-weight: 700 !important;
+
+        box-shadow: 0 6px 15px rgba(66, 58, 142, 0.25);
+
+        transition: all 0.2s ease-in-out;
+    }
+
+    .stButton > button:hover {
+        background: linear-gradient(
+            135deg,
+            #342d75,
+            #423a8e
+        ) !important;
+
+        transform: translateY(-2px);
+
+        box-shadow: 0 8px 20px rgba(66, 58, 142, 0.35);
+    }
+
+    .stButton > button:active {
+        transform: translateY(0);
+    }
+
+
+    /* =====================================================
+       UPLOADED IMAGE SECTION
+       ===================================================== */
+
+    .uploaded-title {
+        color: #29235c !important;
+        font-size: 24px;
+        font-weight: 700;
+        margin-top: 25px;
+        margin-bottom: 15px;
+    }
+
+    [data-testid="stImage"] {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+
+    /* =====================================================
+       SUCCESS RESULT
+       ===================================================== */
+
+    .result-genuine {
+        background: linear-gradient(
+            135deg,
+            #ecfdf3,
+            #dff8e9
+        );
+
+        border: 2px solid #22c55e;
+
+        color: #166534 !important;
+
+        padding: 28px;
+        border-radius: 16px;
+
+        text-align: center;
+
+        font-size: 30px;
+        font-weight: 800;
+
+        margin-top: 25px;
+
+        box-shadow: 0 8px 20px rgba(34, 197, 94, 0.12);
+    }
+
+
+    /* =====================================================
+       FORGED RESULT
+       ===================================================== */
+
+    .result-forged {
+        background: linear-gradient(
+            135deg,
+            #fff1f2,
+            #fee2e2
+        );
+
+        border: 2px solid #ef4444;
+
+        color: #991b1b !important;
+
+        padding: 28px;
+        border-radius: 16px;
+
+        text-align: center;
+
+        font-size: 30px;
+        font-weight: 800;
+
+        margin-top: 25px;
+
+        box-shadow: 0 8px 20px rgba(239, 68, 68, 0.12);
+    }
+
+
+    /* =====================================================
+       INFORMATION CARD
+       ===================================================== */
+
+    .info {
+        background: #ffffff !important;
+
+        padding: 24px;
+
+        border-radius: 16px;
+
+        border: 1px solid #e2e4f0;
+
+        margin-top: 25px;
+
+        box-shadow: 0 8px 25px rgba(42, 35, 92, 0.07);
+
         color: #374151 !important;
     }
 
+    .info h3,
+    .info h4 {
+        color: #29235c !important;
+    }
 
-    /* ==============================
+    .info p {
+        color: #4b5563 !important;
+    }
+
+
+    /* =====================================================
        METRICS
-       ============================== */
+       ===================================================== */
 
     [data-testid="stMetric"] {
-        background-color: #ffffff;
-        border: 1px solid #e5e7eb;
+        background: #f8f8ff;
+        border: 1px solid #e4e2f5;
+        border-radius: 12px;
         padding: 15px;
-        border-radius: 10px;
     }
 
     [data-testid="stMetricLabel"] {
-        color: #6b7280 !important;
+        color: #667085 !important;
     }
 
     [data-testid="stMetricValue"] {
-        color: #202a55 !important;
+        color: #423a8e !important;
+        font-weight: 700 !important;
     }
 
 
-    /* ==============================
-       INFO BOX
-       ============================== */
+    /* =====================================================
+       SPINNER
+       ===================================================== */
 
-    [data-testid="stAlert"] {
-        color: #374151 !important;
+    .stSpinner > div {
+        color: #423a8e !important;
     }
 
 
-    /* ==============================
-       CODE BLOCK
-       ============================== */
+    /* =====================================================
+       WARNING / ERROR
+       ===================================================== */
 
-    code {
-        color: #202a55;
+    div[data-testid="stAlert"] {
+        border-radius: 12px;
     }
 
 
-    /* ==============================
+    /* =====================================================
        FOOTER
-       ============================== */
+       ===================================================== */
 
     .footer {
         text-align: center;
         color: #6b7280 !important;
-        padding: 30px 0 10px 0;
-        margin-top: 50px;
-        border-top: 1px solid #d1d5db;
+
+        margin-top: 45px;
+        padding: 25px;
+
+        border-top: 1px solid #d9dbea;
+
+        font-size: 14px;
+        line-height: 1.7;
     }
 
     .footer b {
-        color: #202a55 !important;
+        color: #423a8e !important;
     }
-    
-</style>
-""", unsafe_allow_html=True)
+
+
+    /* =====================================================
+       HORIZONTAL DIVIDER
+       ===================================================== */
+
+    hr {
+        border: none !important;
+        border-top: 1px solid #dedff0 !important;
+        margin: 30px 0;
+    }
+
+
+    /* =====================================================
+       MOBILE RESPONSIVE
+       ===================================================== */
+
+    @media (max-width: 768px) {
+
+        .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        .title {
+            font-size: 30px;
+        }
+
+        .subtitle {
+            font-size: 15px;
+        }
+
+        .upload-card {
+            padding: 18px;
+        }
+
+        .result-genuine,
+        .result-forged {
+            font-size: 24px;
+        }
+
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # ============================================================
 # MODEL ARCHITECTURE
@@ -273,16 +417,17 @@ class SiameseResNet(nn.Module):
 
         super().__init__()
 
+        # Same ResNet-18 architecture used during training
         self.backbone = models.resnet18(
             weights=None
         )
 
         num_features = self.backbone.fc.in_features
 
+        # Remove original classification layer
         self.backbone.fc = nn.Identity()
 
-        # IMPORTANT:
-        # Same architecture used during training
+        # 128-dimensional embedding head
         self.fc_head = nn.Sequential(
 
             nn.Linear(
@@ -319,11 +464,35 @@ class SiameseResNet(nn.Module):
 
 
 # ============================================================
-# LOAD MODEL
+# FILE PATHS
+# ============================================================
+
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+RESNET_PATH = os.path.join(
+    BASE_DIR,
+    "siamese_resnet_signature_final.pth"
+)
+
+SVM_PATH = os.path.join(
+    BASE_DIR,
+    "signature_svm_classifier.pkl"
+)
+
+SCALER_PATH = os.path.join(
+    BASE_DIR,
+    "signature_feature_scaler.pkl"
+)
+
+
+# ============================================================
+# LOAD RESNET MODEL
 # ============================================================
 
 @st.cache_resource
-def load_model():
+def load_resnet():
 
     device = torch.device(
         "cuda"
@@ -334,19 +503,26 @@ def load_model():
     model = SiameseResNet().to(device)
 
     checkpoint = torch.load(
-        "siamese_resnet_signature_final.pth",
+        RESNET_PATH,
         map_location=device
     )
+
+    # Support both normal state_dict
+    # and checkpoint format
 
     if (
         isinstance(checkpoint, dict)
         and "model_state_dict" in checkpoint
     ):
+
         state_dict = checkpoint[
             "model_state_dict"
         ]
+
     else:
+
         state_dict = checkpoint
+
 
     model.load_state_dict(
         state_dict
@@ -358,23 +534,63 @@ def load_model():
 
 
 # ============================================================
-# LOAD MODEL SAFELY
+# LOAD SVM
+# ============================================================
+
+@st.cache_resource
+def load_svm():
+
+    with open(
+        SVM_PATH,
+        "rb"
+    ) as file:
+
+        svm_model = pickle.load(file)
+
+    return svm_model
+
+
+# ============================================================
+# LOAD SCALER
+# ============================================================
+
+@st.cache_resource
+def load_scaler():
+
+    with open(
+        SCALER_PATH,
+        "rb"
+    ) as file:
+
+        scaler = pickle.load(file)
+
+    return scaler
+
+
+# ============================================================
+# LOAD ALL MODELS
 # ============================================================
 
 try:
 
-    model, device = load_model()
+    model, device = load_resnet()
 
-    model_loaded = True
+    svm_model = load_svm()
+
+    scaler = load_scaler()
+
+    models_loaded = True
 
 except Exception as e:
 
-    model_loaded = False
+    models_loaded = False
 
     st.error(
-        "Model could not be loaded. "
-        "Make sure 'siamese_resnet_signature_final.pth' "
-        "is in the same folder as app.py."
+        "❌ Model files could not be loaded."
+    )
+
+    st.error(
+        str(e)
     )
 
 
@@ -412,14 +628,10 @@ transform = transforms.Compose([
 
 
 # ============================================================
-# GET EMBEDDING
+# GET RESNET EMBEDDING
 # ============================================================
 
-def get_embedding(
-    image,
-    model,
-    device
-):
+def get_embedding(image):
 
     image = image.convert(
         "RGB"
@@ -443,325 +655,356 @@ def get_embedding(
             image_tensor
         )
 
-    return embedding
+    # Convert to NumPy
+    embedding = embedding.cpu().numpy()
+
+    # Shape:
+    # (1, 128)
+
+    return embedding[0]
 
 
 # ============================================================
-# COMPARE SIGNATURES
+# CREATE SVM FEATURES
 # ============================================================
 
-def compare_signatures(
-    image1,
-    image2,
-    model,
-    device
+def create_pair_features(
+    embedding1,
+    embedding2
 ):
 
-    embedding1 = get_embedding(
-        image1,
-        model,
-        device
+    # Absolute difference
+    difference = np.abs(
+        embedding1 - embedding2
     )
 
-    embedding2 = get_embedding(
-        image2,
-        model,
-        device
+    # Element-wise multiplication
+    product = (
+        embedding1 * embedding2
     )
 
-    distance = torch.norm(
-        embedding1 - embedding2,
-        p=2
-    ).item()
-
-    return distance
-
-
-# ============================================================
-# THRESHOLD
-# ============================================================
-
-# Temporary threshold from current testing.
-# Replace this after calculating the optimal validation threshold.
-
-THRESHOLD = 1.0
-
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.markdown(
-        "## ✍️ Signature AI"
-    )
-
-    st.markdown("---")
-
-    page = st.radio(
-        "Navigation",
+    # Combine both
+    features = np.concatenate(
         [
-            "🏠 Home",
-            "🔍 Verification",
-            "📖 Project Explanation",
-            "ℹ️ About"
+            difference,
+            product
         ]
     )
 
-    st.markdown("---")
-
-    st.markdown(
-        """
-        **AI-Based Signature Verification**
-
-        Siamese Neural Network  
-        + ResNet-18  
-        + Contrastive Learning
-        """
-    )
+    return features
 
 
 # ============================================================
-# HOME
+# PREDICT SIGNATURE
 # ============================================================
 
-if page == "🏠 Home":
+def predict_signature(
+    image1,
+    image2
+):
 
-    st.markdown(
-        '<div class="main-title">'
-        '✍️ AI-Based Signature Verification'
-        '</div>',
-        unsafe_allow_html=True
+    # ---------------------------------
+    # Generate embeddings
+    # ---------------------------------
+
+    embedding1 = get_embedding(
+        image1
     )
 
-    st.markdown(
-        '<div class="subtitle">'
-        'Verify handwritten signatures using Deep Learning'
-        '</div>',
-        unsafe_allow_html=True
+    embedding2 = get_embedding(
+        image2
     )
 
 
-    col1, col2, col3 = st.columns(3)
+    # ---------------------------------
+    # Create pair features
+    # ---------------------------------
+
+    features = create_pair_features(
+        embedding1,
+        embedding2
+    )
 
 
-    with col1:
+    # ---------------------------------
+    # Reshape for Scaler
+    # ---------------------------------
 
-        st.markdown(
-            """
-            <div class="card">
-            <h3>🧠 AI Model</h3>
-            <p>
-            Siamese Neural Network with
-            ResNet-18 architecture.
-            </p>
-            </div>
-            """,
-            unsafe_allow_html=True
+    features = features.reshape(
+        1,
+        -1
+    )
+
+
+    # ---------------------------------
+    # Apply same scaler
+    # used during SVM training
+    # ---------------------------------
+
+    scaled_features = scaler.transform(
+        features
+    )
+
+
+    # ---------------------------------
+# SVM prediction
+# ---------------------------------
+
+    prediction = svm_model.predict(
+        scaled_features
+    )[0]
+
+
+    # ---------------------------------
+    # SVM probability
+    # ---------------------------------
+
+    probability = None
+
+    if hasattr(
+        svm_model,
+        "predict_proba"
+    ):
+
+        probabilities = svm_model.predict_proba(
+            scaled_features
         )
 
+        class_index = list(
+            svm_model.classes_
+        ).index(prediction)
 
-    with col2:
-
-        st.markdown(
-            """
-            <div class="card">
-            <h3>🔎 Verification</h3>
-            <p>
-            Compare two handwritten signatures
-            using embedding distance.
-            </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        probability = float(
+            probabilities[0][class_index]
+        ) * 100
 
 
-    with col3:
-
-        st.markdown(
-            """
-            <div class="card">
-            <h3>⚡ Fast Prediction</h3>
-            <p>
-            Generate embeddings and calculate
-            Euclidean distance instantly.
-            </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    return prediction, probability
 
 
-    st.markdown("## How It Works")
+# ============================================================
+# HOME PAGE
+# ============================================================
+
+st.markdown(
+    """
+    <div class="title">
+        ✍️ Handwritten Signature Verification
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <div class="subtitle">
+        Compare two signatures using ResNet-18 + SVM
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# CHECK MODELS
+# ============================================================
+
+if not models_loaded:
+
+    st.stop()
+
+
+# ============================================================
+# UPLOAD SECTION
+# ============================================================
+
+col1, col2 = st.columns(2)
+
+
+# ------------------------------------------------------------
+# SIGNATURE 1
+# ------------------------------------------------------------
+
+with col1:
 
     st.markdown(
         """
-        ### 1️⃣ Upload Reference Signature
+        <div class="upload-card">
 
-        Upload a known genuine signature.
+        <h3>📄 Reference Signature</h3>
 
-        ### 2️⃣ Upload Signature to Verify
+        <p>
+        Upload the genuine/reference signature.
+        </p>
 
-        Upload the signature that needs verification.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-        ### 3️⃣ AI Comparison
+    image1_file = st.file_uploader(
+        "Choose reference signature",
+        type=[
+            "png",
+            "jpg",
+            "jpeg",
+            "bmp",
+            "tif",
+            "tiff"
+        ],
+        key="image1"
+    )
 
-        The Siamese Neural Network converts both
-        signatures into numerical embeddings.
 
-        ### 4️⃣ Distance Calculation
+# ------------------------------------------------------------
+# SIGNATURE 2
+# ------------------------------------------------------------
 
-        Euclidean distance is calculated between
-        the two embeddings.
+with col2:
 
-        ### 5️⃣ Final Result
-
-        The distance is compared with a threshold.
-
-        **Small distance → Similar signatures**
-
-        **Large distance → Different signatures**
+    st.markdown(
         """
+        <div class="upload-card">
+
+        <h3>✍️ Signature to Verify</h3>
+
+        <p>
+        Upload the signature you want to verify.
+        </p>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    image2_file = st.file_uploader(
+        "Choose signature to verify",
+        type=[
+            "png",
+            "jpg",
+            "jpeg",
+            "bmp",
+            "tif",
+            "tiff"
+        ],
+        key="image2"
     )
 
 
 # ============================================================
-# VERIFICATION
+# DISPLAY IMAGES
 # ============================================================
 
-elif page == "🔍 Verification":
+if image1_file and image2_file:
 
-    st.markdown(
-        '<div class="main-title">'
-        '🔍 Signature Verification'
-        '</div>',
-        unsafe_allow_html=True
+    image1 = Image.open(
+        image1_file
+    )
+
+    image2 = Image.open(
+        image2_file
     )
 
     st.markdown(
-        '<div class="subtitle">'
-        'Upload two signatures to compare them'
-        '</div>',
-        unsafe_allow_html=True
+        "### Uploaded Signatures"
     )
-
-
-    if not model_loaded:
-
-        st.stop()
-
 
     col1, col2 = st.columns(2)
 
-
     with col1:
 
-        st.markdown(
-            "### 📄 Reference Signature"
+        st.image(
+            image1,
+            caption="Reference Signature",
+            use_container_width=True
         )
-
-        reference_file = st.file_uploader(
-            "Upload original/reference signature",
-            type=[
-                "png",
-                "jpg",
-                "jpeg",
-                "bmp",
-                "tif",
-                "tiff"
-            ],
-            key="reference"
-        )
-
 
     with col2:
 
-        st.markdown(
-            "### ✍️ Signature to Verify"
-        )
-
-        test_file = st.file_uploader(
-            "Upload signature to verify",
-            type=[
-                "png",
-                "jpg",
-                "jpeg",
-                "bmp",
-                "tif",
-                "tiff"
-            ],
-            key="test"
-        )
-
-
-    if reference_file and test_file:
-
-        reference_image = Image.open(
-            reference_file
-        )
-
-        test_image = Image.open(
-            test_file
-        )
-
-
-        col1, col2 = st.columns(2)
-
-
-        with col1:
-
-            st.image(
-                reference_image,
-                caption="Reference Signature",
-                use_container_width=True
-            )
-
-
-        with col2:
-
-            st.image(
-                test_image,
-                caption="Signature to Verify",
-                use_container_width=True
-            )
-
-
-        st.markdown("")
-
-
-        if st.button(
-            "🔍 VERIFY SIGNATURE",
+        st.image(
+            image2,
+            caption="Signature to Verify",
             use_container_width=True
-        ):
+        )
+
+
+# ============================================================
+# COMPARE BUTTON
+# ============================================================
+
+st.markdown("")
+
+
+if st.button(
+    "🔍 COMPARE SIGNATURES",
+    use_container_width=True
+):
+
+    if not image1_file or not image2_file:
+
+        st.warning(
+            "⚠️ Please upload both signatures."
+        )
+
+    else:
+
+        image1 = Image.open(
+            image1_file
+        )
+
+        image2 = Image.open(
+            image2_file
+        )
+
+        try:
 
             with st.spinner(
                 "Analyzing signatures..."
             ):
 
-                distance = compare_signatures(
-
-                    reference_image,
-
-                    test_image,
-
-                    model,
-
-                    device
+                prediction, probability = predict_signature(
+                    image1,
+                    image2
                 )
 
 
-            if distance <= THRESHOLD:
+            # ==================================================
+            # CONVERT SVM OUTPUT TO RESULT
+            # ==================================================
+
+
+            prediction_string = str(
+                prediction
+            ).lower()
+
+            # SVM training labels:
+            # 0 = Genuine
+            # 1 = Forged
+
+            if prediction_string == "0":
+                result = "GENUINE"
+            else:
+                result = "FORGED"
+
+
+            # ==================================================
+            # DISPLAY RESULT
+            # ==================================================
+
+            if result == "GENUINE":
 
                 st.markdown(
                     """
-                    <div class="result-original">
-                    ✅ ORIGINAL (O)
+                    <div class="result-genuine">
+
+                    ✅ GENUINE SIGNATURE
+
                     <br>
-                    <span style="font-size:18px;">
-                    Signatures are sufficiently similar
+
+                    <span style="font-size:17px;">
+                    The signatures are classified as similar.
                     </span>
+
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -772,421 +1015,71 @@ elif page == "🔍 Verification":
                 st.markdown(
                     """
                     <div class="result-forged">
-                    ❌ FORGED (F)
+
+                    ❌ FORGED SIGNATURE
+
                     <br>
-                    <span style="font-size:18px;">
-                    Signatures are sufficiently different
+
+                    <span style="font-size:17px;">
+                    The signatures are classified as different.
                     </span>
+
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
 
-            st.markdown("")
+            # ==================================================
+            # RESULT INFORMATION
+            # ==================================================
 
+            st.markdown(
+                '<div class="info">',
+                unsafe_allow_html=True
+            )
 
-            col1, col2, col3 = st.columns(3)
+            st.markdown(
+                "### Prediction Details"
+            )
 
+            col1, col2 = st.columns(2)
 
             with col1:
 
                 st.metric(
-                    "Euclidean Distance",
-                    f"{distance:.4f}"
+                    "SVM Prediction",
+                    str(prediction)
                 )
-
 
             with col2:
 
-                st.metric(
-                    "Threshold",
-                    f"{THRESHOLD:.4f}"
-                )
-
-
-            with col3:
-
-                if distance <= THRESHOLD:
+                if probability is not None:
 
                     st.metric(
-                        "Decision",
-                        "ORIGINAL"
+                        "SVM Confidence",
+                        f"{probability:.2f}%"
                     )
 
                 else:
 
                     st.metric(
-                        "Decision",
-                        "FORGED"
+                        "Classifier",
+                        "SVM"
                     )
 
-
-            st.info(
-                "Note: The current threshold is a "
-                "temporary threshold used for demonstration. "
-                "For final evaluation, it should be optimized "
-                "using validation data."
+            st.markdown(
+                "</div>",
+                unsafe_allow_html=True
             )
 
 
-# ============================================================
-# PROJECT EXPLANATION
-# ============================================================
+        except Exception as e:
 
-elif page == "📖 Project Explanation":
+            st.error(
+                "❌ Prediction failed."
+            )
 
-    st.markdown(
-        '<div class="main-title">'
-        '📖 Project Explanation'
-        '</div>',
-        unsafe_allow_html=True
-    )
+            st.exception(e)
 
 
-    st.markdown("## 1. Project Overview")
-
-    st.write(
-        """
-        This project is an AI-based handwritten signature
-        verification system developed using a Siamese Neural
-        Network and ResNet-18.
-
-        The objective is to determine whether two handwritten
-        signatures are sufficiently similar or different.
-
-        Instead of treating signature verification as a normal
-        image classification problem, the system learns a
-        similarity relationship between two signatures.
-        """
-    )
-
-
-    st.markdown("## 2. Problem Statement")
-
-    st.write(
-        """
-        Traditional signature verification can depend on
-        manual inspection, which can be time-consuming and
-        subjective.
-
-        The proposed system uses Deep Learning to automatically
-        compare handwritten signatures and identify whether the
-        signatures appear to belong to the same writer.
-        """
-    )
-
-
-    st.markdown("## 3. Dataset")
-
-    st.write(
-        """
-        The model was trained using handwritten signature
-        datasets, including the CEDAR signature dataset.
-
-        The CEDAR dataset contains genuine signatures and
-        forged signatures from multiple writers.
-
-        These signatures are used to construct pairs for
-        Siamese Network training.
-        """
-    )
-
-
-    st.markdown("## 4. Siamese Neural Network")
-
-    st.write(
-        """
-        A Siamese Neural Network consists of two identical
-        branches that share the same weights.
-
-        Both signature images are passed through the same
-        feature extraction network.
-
-        The network generates an embedding for each signature.
-
-        The embeddings are then compared using Euclidean
-        distance.
-        """
-    )
-
-
-    st.markdown("## 5. ResNet-18")
-
-    st.write(
-        """
-        ResNet-18 is used as the feature extraction backbone.
-
-        ResNet uses residual connections that help deep neural
-        networks learn useful image features effectively.
-
-        In this project, the original classification layer
-        is replaced with a custom embedding head.
-        """
-    )
-
-
-    st.markdown("## 6. Embedding")
-
-    st.write(
-        """
-        Each signature is converted into a 128-dimensional
-        numerical representation called an embedding.
-
-        Signatures that are visually and structurally similar
-        should produce embeddings that are closer together.
-
-        Different signatures should produce embeddings that
-        are farther apart.
-        """
-    )
-
-
-    st.markdown("## 7. Contrastive Loss")
-
-    st.write(
-        """
-        Contrastive Loss is used to train the Siamese Network.
-
-        The model learns to reduce the distance between
-        similar signature pairs and increase the distance
-        between dissimilar pairs.
-
-        This makes Contrastive Loss suitable for signature
-        verification.
-        """
-    )
-
-
-    st.markdown("## 8. Euclidean Distance")
-
-    st.write(
-        """
-        After generating embeddings for two signatures,
-        Euclidean distance is calculated.
-
-        A smaller distance indicates greater similarity.
-
-        A larger distance indicates greater difference.
-        """
-    )
-
-
-    st.code(
-        """
-Distance = ||Embedding 1 - Embedding 2||
-        """,
-        language="text"
-    )
-
-
-    st.markdown("## 9. Verification Process")
-
-    st.write(
-        """
-        The complete verification process is:
-
-        1. Upload a reference signature.
-        2. Upload the signature to verify.
-        3. Preprocess both images.
-        4. Generate embeddings using ResNet-18.
-        5. Calculate Euclidean distance.
-        6. Compare the distance with the threshold.
-        7. Display the final verification result.
-        """
-    )
-
-
-    st.markdown("## 10. Decision Logic")
-
-    st.code(
-        """
-if distance <= threshold:
-    ORIGINAL (O)
-else:
-    FORGED (F)
-        """,
-        language="python"
-    )
-
-
-    st.markdown("## 11. Technologies Used")
-
-    st.markdown(
-        """
-        - 🐍 Python
-        - 🧠 PyTorch
-        - 🔥 ResNet-18
-        - 🔗 Siamese Neural Network
-        - 📉 Contrastive Loss
-        - 🖼️ PIL
-        - 🎨 Streamlit
-        - 📊 Euclidean Distance
-        - ☁️ Google Colab
-        - 📁 CEDAR Dataset
-        """
-    )
-
-
-    st.markdown("## 12. Training Results")
-
-    st.write(
-        """
-        During training, the model achieved its best observed
-        validation accuracy of approximately 89.83% at Epoch 3,
-        with a validation loss of approximately 0.2755.
-
-        Later epochs showed some fluctuation in validation
-        performance, so the best validation checkpoint should
-        be preferred for final evaluation when available.
-        """
-    )
-
-
-    st.markdown("## 13. Applications")
-
-    st.markdown(
-        """
-        - Banking and financial document verification
-        - Legal document verification
-        - Cheque processing
-        - Identity verification
-        - Document authentication
-        - Academic certificate verification
-        - Automated signature screening
-        """
-    )
-
-
-    st.markdown("## 14. Limitations")
-
-    st.markdown(
-        """
-        - Performance depends on the quality of input images.
-        - Threshold selection affects the final decision.
-        - Very different writing conditions can affect similarity.
-        - A limited test set may not represent real-world performance.
-        - The system should be evaluated using larger unseen datasets
-          before deployment in high-stakes applications.
-        """
-    )
-
-
-    st.markdown("## 15. Future Improvements")
-
-    st.markdown(
-        """
-        - Optimize the verification threshold using validation data.
-        - Evaluate using FAR, FRR and EER.
-        - Increase the size and diversity of the training dataset.
-        - Add image-quality checking.
-        - Build a database of authorized reference signatures.
-        - Deploy the system as a web application.
-        - Add authentication and secure storage for signatures.
-        """
-    )
-
-
-# ============================================================
-# ABOUT
-# ============================================================
-
-elif page == "ℹ️ About":
-
-    st.markdown(
-        '<div class="main-title">'
-        'ℹ️ About the Project'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-
-    st.markdown(
-        """
-        <div class="card">
-
-        <h2>AI-Based Handwritten Signature Verification</h2>
-
-        <p>
-        This application demonstrates an AI-powered handwritten
-        signature verification system using a Siamese Neural
-        Network with a ResNet-18 feature extractor.
-        </p>
-
-        <h3>Model</h3>
-
-        <p>
-        Siamese ResNet-18
-        </p>
-
-        <h3>Embedding Size</h3>
-
-        <p>
-        128 dimensions
-        </p>
-
-        <h3>Comparison Method</h3>
-
-        <p>
-        Euclidean Distance
-        </p>
-
-        <h3>Training Approach</h3>
-
-        <p>
-        Contrastive Learning
-        </p>
-
-        <h3>Interface</h3>
-
-        <p>
-        Streamlit
-        </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-    st.markdown("### How to Use")
-
-    st.markdown(
-        """
-        **Step 1:** Go to **Verification**.
-
-        **Step 2:** Upload the genuine/reference signature.
-
-        **Step 3:** Upload the signature you want to verify.
-
-        **Step 4:** Click **VERIFY SIGNATURE**.
-
-        **Step 5:** The application calculates the embedding
-        distance and displays the result.
-        """
-    )
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.markdown(
-    """
-    <div class="footer">
-
-    <b>AI-Based Handwritten Signature Verification</b>
-    <br><br>
-
-    Siamese Neural Network • ResNet-18 • Contrastive Learning
-    <br>
-
-    Developed using Python, PyTorch and Streamlit
-    <br><br>
-
-    © 2026 Signature Verification System
-
-    </div>
-    """,
-    unsafe_allow_html=True
-)
