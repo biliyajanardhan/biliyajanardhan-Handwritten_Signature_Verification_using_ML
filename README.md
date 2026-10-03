@@ -1,37 +1,86 @@
 # ✍️ AI-Based Handwritten Signature Verification
 
-An AI-powered handwritten signature verification system that uses a **Siamese Neural Network with ResNet-18** to determine whether two handwritten signatures are sufficiently similar or likely forged.
+An AI-based handwritten signature verification system that combines a **Siamese Neural Network with ResNet-18** for feature extraction and a **Support Vector Machine (SVM)** for final signature classification.
+
+The system compares a genuine/reference signature with a signature to be verified and classifies the pair as:
+
+- ✅ **Genuine**
+- ❌ **Forged**
+
+The application is implemented using **Python, PyTorch, Scikit-learn, and Streamlit**.
+
+---
 
 ## 🚀 Project Overview
 
-Signature verification is an important biometric authentication technique used in banking, legal documents, financial transactions, and identity verification.
+Handwritten signature verification is an important biometric authentication technique used in applications such as:
 
-This project uses **deep learning and metric learning** to compare two signature images and calculate their similarity using learned feature embeddings.
+- Banking and financial transactions
+- Legal documents
+- Identity verification
+- Document authentication
+- Automated signature screening
 
-The system takes:
+Instead of directly comparing raw signature images, this project uses a deep learning model to extract meaningful feature representations from the signatures.
 
-- 📝 Reference Signature
-- 📝 Signature to Verify
-
-and produces:
-
-- **Similarity Distance**
-- **Verification Result**
-- **Genuine / Forged prediction**
+The extracted features are then processed by a machine learning classifier to determine whether the two signatures belong to the same class.
 
 ---
 
 ## 🧠 Model Architecture
 
-The project uses a **Siamese Neural Network** consisting of:
+The project uses a **Siamese-style ResNet-18 feature extraction network combined with an SVM classifier**.
+
+### Complete Pipeline
 
 ```text
-Input Signature 1 ──┐
-                    ├── ResNet-18 ── Feature Embedding ──┐
-Input Signature 2 ──┘                                     │
-                                                          ↓
-                                                Euclidean Distance
-                                                          ↓
-                                                   Threshold
-                                                          ↓
-                                             Genuine / Forged
+                 Reference Signature
+                         │
+                         ▼
+                    Image Preprocessing
+                         │
+                         ▼
+                    ResNet-18 Backbone
+                         │
+                         ▼
+                 128-Dimensional Embedding
+                         │
+                         │
+                         │
+                         │
+                         │
+                         │
+                         │
+                 ┌───────┴────────┐
+                 │                │
+                 │                │
+                 ▼                ▼
+        Signature Embedding 1  Signature Embedding 2
+                 │                │
+                 └───────┬────────┘
+                         │
+                         ▼
+              Pair Feature Generation
+                         │
+              ┌──────────┴──────────┐
+              │                     │
+              ▼                     ▼
+       Absolute Difference    Element-wise
+       |Embedding1 - Embedding2|   Multiplication
+              │                     │
+              └──────────┬──────────┘
+                         │
+                         ▼
+                  256-D Feature Vector
+                         │
+                         ▼
+                   StandardScaler
+                         │
+                         ▼
+                    SVM Classifier
+                         │
+                         ▼
+                ┌────────┴────────┐
+                │                 │
+                ▼                 ▼
+             Genuine            Forged
